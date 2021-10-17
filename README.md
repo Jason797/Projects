@@ -1,5 +1,5 @@
 # Projects
-Class/Personal Projects
+Work/Class Projects
 
 This is the repository for all Statistics/Data Science projects I have done
 
