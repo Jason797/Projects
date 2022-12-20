@@ -1,0 +1,471 @@
+---
+title: "STOR 664 Final Project"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(naniar)
+```
+
+```{r, include=FALSE}
+df <- read.csv("vehicles.csv")
+```
+
+# Introduction
+
+|  The introduction of electric cars has come recently as a solution to the long-term inability of sustaining traditional gasoline-powered vehicles. While this is a large step in reducing transportation reliance on fossil fuels, how efficient and cost-effective is using one of these vehicles today? While being electric means that there is no money spent on filling up the tank with gas, there is still a cost of charging these vehicles, not to mention the upfront cost that comes with it. This analysis aims to answer the question of whether or not electric cars are more cost-effective to travel in, and if so, how much more cost-effective?
+|
+|  This report covers findings on the efficiency and cost-effectiveness of electric cars compared to other fuel types. Car data includes mileage, emissions, and other areas from cars created between 1984 and 2017. Models are created from this data to deduce the greatest factors towards car usage cost and these findings are then used to conclude that electric cars are overall more cost-effective in the measurement of travel distance. Another question answered in this report is how has car emissions changed over time and between makes? Electric cars have no fuel emission when in use, so this question is aimed towards traditional transportation vehicles. A model was created to deduce the greatest factors affecting carbon dioxide emission and the findings were used to see how certain variables affected carbon dioxide output.
+  
+
+
+# Data Overview
+
+|  The data set consists of car models made from the years 1984 to 2017. This fuel economy data is the result of vehicle testing done by the Environmental Protection Agency's National Vehicle and Fuel Emissions Laboratory and by vehicle manufacturers. The data was retrieved from Kaggle at the url https://www.kaggle.com/datasets/thedevastator/fuel-economy-data-how-efficient-are-today-s-cars?resource=download.
+|  
+|  The original data had 37936 and 84 variables which describe the travel efficiency and emissions of different cars. Notable variables include Miles Per Gallon, CO2 emission (grams per mile), year manufactured, and fuel types.
+|
+|   This data set was interesting for a few reasons. The first was that the data spans almost 3 decades. This means that there was a lot of potential for measuring fuel trends over an extended period of time. The second reason was the possibility of using the variables to build a cost of travel prediction model. Many other data sets focused on upfront cost of the cars, but few had the required variables to calculate car efficiency easily. Variables such as fuel type and make also made it easier to distinguish electric cars from traditional cars, making it easier to find electric car effects. The data also allowed for a model predicting CO2 emissions over a long range of time.
+|
+|   The data contained a very high number of improbable values for CO2 emissions (the value being -1). Further investigation found that the cars without proper values ranged mostly between 1986 and 2012. As a big question of this project was to see the effects of various variables on CO2 emission, it was decided to remove those rows without CO2 emissions rather than imputing values, as these would greatly affect our CO2 model. After removing these rows, the data was left with 5783 full observations spanning the years 2013 to 2017.
+|
+|   To prepare the data for cost modeling and exploratory analysis, a column was created based on fuel type to show if a car was fully electric or not, in this study hybrid cars were treated as traditional vehicles as they still relied on gas. 3 other columns were also created by using each car's variables for miles per gallon in the city, highway, and combination of the two (calculated as the mean of city and highway mpg). These mpg values were transformed based on the car's fuel type to determine the cost of gas for traveling 60 miles with the car. Price data was taken from gasprices.aaa.com on the date 11/25/2022. Price for electric cars was calculated by treating 33.7kWh as the electrical equivalent of one gallon of gasoline, with its own price taken on the same day. These would be the main variable to measure a car's cost-effectiveness in travel and transportation.
+
+
+
+```{r, include=FALSE}
+# Select columns we want
+df1 <- select(df,charge240,city08,city08,highway08,co2,comb08,fuelType1,make,model,VClass,year)
+# Remove duplicates
+df1 <- df1[!duplicated(df1), ]
+
+```
+
+```{r, include=FALSE}
+# Check for NA values
+str(df1)
+df1[!complete.cases(df1), ]
+```
+
+```{r, include=FALSE}
+# Check for weird values
+
+# A bunch of the co2 column have value of -1
+df1 <- replace_with_na(df1,replace = list(co2 = -1))
+#df1 <- replace_with_na(df1,replace = list(co2 = 0))
+
+# Deciding to make those all NA and not try to impute values for now, many of those values are from early years (1980s and 90s)
+
+df1[!is.na(df1$co2),] %>% group_by(year) %>% summarize(n=n())
+
+```
+
+
+
+```{r, include=FALSE}
+# Create electric column to denote whether or not a car uses electric method of fuel
+df1$electric <- df1$fuelType1=="Electricity"
+
+```
+
+```{r, include=FALSE}
+# Create column that combines Make and Model
+df1$name <- paste(df1$make,df1$model,sep=" ")
+```
+
+```{r, include=FALSE}
+# Add cost per 60 miles column for city, highway, combined
+
+
+### CITY
+df1$cost60city <- NA
+
+# Gas prices taken on 11/25/2022
+
+# Electric cars
+df1$cost60city[which(df1$electric == TRUE)] <- (60/df1$city08[which(df1$electric == TRUE)]) * 4.58
+# 4.58 is average cost of using 33.7 kWh
+
+# Regular Gasoline
+df1$cost60city[which(df1$fuelType1 == "Regular Gasoline")] <- (60/df1$city08[which(df1$fuelType1 == "Regular Gasoline")]) * 3.578
+
+# Premium Gasoline
+df1$cost60city[which(df1$fuelType1 == "Premium Gasoline")] <- (60/df1$city08[which(df1$fuelType1 == "Premium Gasoline")]) * 4.343
+
+# Diesel
+df1$cost60city[which(df1$fuelType1 == "Diesel")] <- (60/df1$city08[which(df1$fuelType1 == "Diesel")]) * 5.248
+
+# Natural Gas
+df1$cost60city[which(df1$fuelType1 == "Natural Gas")] <- (60/df1$city08[which(df1$fuelType1 == "Natural Gas")]) * 2.26
+
+# Midgrade Gasoline
+df1$cost60city[which(df1$fuelType1 == "Midgrade Gasoline")] <- (60/df1$city08[which(df1$fuelType1 == "Midgrade Gasoline")]) * 4.035
+
+
+
+### HIWGHWAY
+df1$cost60hwy <- NA
+
+# Gas prices taken on 11/15/2022
+
+# Electric cars
+df1$cost60hwy[which(df1$electric == TRUE)] <- (60/df1$highway08[which(df1$electric == TRUE)]) * 4.58
+# 4.58 is average cost of using 33.7 kWh
+
+# Regular Gasoline
+df1$cost60hwy[which(df1$fuelType1 == "Regular Gasoline")] <- (60/df1$highway08[which(df1$fuelType1 == "Regular Gasoline")]) * 3.578
+
+# Premium Gasoline
+df1$cost60hwy[which(df1$fuelType1 == "Premium Gasoline")] <- (60/df1$highway08[which(df1$fuelType1 == "Premium Gasoline")]) * 4.343
+
+# Diesel
+df1$cost60hwy[which(df1$fuelType1 == "Diesel")] <- (60/df1$highway08[which(df1$fuelType1 == "Diesel")]) * 5.248
+
+# Natural Gas
+df1$cost60hwy[which(df1$fuelType1 == "Natural Gas")] <- (60/df1$highway08[which(df1$fuelType1 == "Natural Gas")]) * 2.26
+
+# Midgrade Gasoline
+df1$cost60hwy[which(df1$fuelType1 == "Midgrade Gasoline")] <- (60/df1$highway08[which(df1$fuelType1 == "Midgrade Gasoline")]) * 4.035
+
+
+### COMBINED
+df1$cost60comb <- NA
+
+# Gas prices taken on 11/15/2022
+
+# Electric cars
+df1$cost60comb[which(df1$electric == TRUE)] <- (60/df1$comb08[which(df1$electric == TRUE)]) * 4.58
+# 4.58 is average cost of using 33.7 kWh
+
+# Regular Gasoline
+df1$cost60comb[which(df1$fuelType1 == "Regular Gasoline")] <- (60/df1$comb08[which(df1$fuelType1 == "Regular Gasoline")]) * 3.578
+
+# Premium Gasoline
+df1$cost60comb[which(df1$fuelType1 == "Premium Gasoline")] <- (60/df1$comb08[which(df1$fuelType1 == "Premium Gasoline")]) * 4.343
+
+# Diesel
+df1$cost60comb[which(df1$fuelType1 == "Diesel")] <- (60/df1$comb08[which(df1$fuelType1 == "Diesel")]) * 5.248
+
+# Natural Gas
+df1$cost60comb[which(df1$fuelType1 == "Natural Gas")] <- (60/df1$comb08[which(df1$fuelType1 == "Natural Gas")]) * 2.26
+
+# Midgrade Gasoline
+df1$cost60comb[which(df1$fuelType1 == "Midgrade Gasoline")] <- (60/df1$comb08[which(df1$fuelType1 == "Midgrade Gasoline")]) * 4.035
+```
+
+
+
+# Exploratory Data Analysis
+
+```{r, include=FALSE}
+# Have to only have rows where co2 is not NA so we can have a correlation matrix
+df2 <- df1[complete.cases(df1),]
+
+df2$electric <- as.numeric(df2$electric)
+
+df2 <- df2[df2$year>2012,]
+```
+
+```{r, echo=FALSE,include=FALSE}
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,city08))
+
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,highway08))
+
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,co2))
+```
+
+
+```{r, include=FALSE}
+# How many cars of each type of fuel
+group_by(df2,fuelType1) %>%
+  summarize(n=n())
+```
+
+```{r, include=FALSE}
+# Cars of each make
+group_by(df2,make) %>%
+  summarize(n=n())
+```
+
+```{r, include=FALSE}
+# Cars of each class
+group_by(df2,VClass) %>%
+  summarize(n=n())
+```
+
+```{r, include=FALSE}
+# mpg histogram
+df2 %>%
+  ggplot() +
+  geom_histogram(aes(comb08))
+```
+
+```{r, include=FALSE}
+# cost60comb histogram
+df2 %>%
+  ggplot() +
+  geom_histogram(aes(cost60comb))
+```
+
+```{r,include=FALSE,echo=FALSE}
+library(reshape2)
+```
+
+|   Plotting a correlation plot between the numerical variables shows that CO2 has some strong negative correlations with mileage as well as moderate correlations with year. It is also shown that the cost of traveling 60 miles correlates negatively with mileage and being electric.
+
+```{r, echo=FALSE}
+cormat <- df2 %>% select(-fuelType1,-make,-model,-VClass,-name) %>% as.matrix %>% cor
+melted_cormat <- melt(cormat)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() + theme(axis.text.x = element_text(angle = 90))
+```
+
+
+```{r, echo=FALSE}
+# Average co2 output by year
+df2 %>% group_by(year) %>% summarize(avgco2=mean(co2)) %>%
+  ggplot() +
+  geom_line(aes(year,avgco2))
+```
+|   Plotting avgco2 emission against year shows an average decrease in CO2 emissions from cars as years increase.
+
+
+
+```{r echo=FALSE}
+
+makes <- group_by(df2,make) %>%
+  summarize(n=n())
+makes <- filter(makes,n>100)
+
+
+
+
+# meancost each year of 60 miles
+filter(df2,make %in% makes$make) %>% group_by(year,make) %>% summarize(meancost60=mean(cost60comb),.groups="drop") %>%
+  ggplot() +
+  geom_line(aes(year,meancost60,color=make))
+```
+| For categorical variables the main one focused on was the make of the car. From this graph we see that almost every make of car has had a decrease in cost per 60 miles over time, we also note that no makes have drastic increases or decreases, but instead generally stay the same relative to one another.
+
+```{r, echo=FALSE}
+makes <- group_by(df2,make) %>%
+  summarize(n=n())
+makes <- filter(makes,n>100)
+
+
+# meanco2 each year
+filter(df2,make %in% makes$make) %>% group_by(year,make) %>% summarize(meanco2=mean(co2),.groups="drop") %>%
+  ggplot() +
+  geom_line(aes(year,meanco2,color=make))
+```
+| It is shown that there seems to be a small decreasing trend in average CO2 emissions from each individual make, while GMC has significantly higher average emission than other makes.
+
+
+Do electric cars have more city/highway mileage?
+```{r}
+t.test(filter(df2,electric==TRUE)$city08,filter(df2,electric==FALSE)$city08,alternative="greater")
+```
+
+Do electric cars have more city mileage than highway mileage?
+```{r}
+t.test(filter(df2,electric==TRUE)$city08,filter(df2,electric==TRUE)$highway08,alternative="greater")
+```
+
+
+ Graph of mpg difference between highway and city (highway-city) for electric and non-electric vehicles
+```{r, echo=FALSE}
+df2 %>% mutate(electric=factor(electric)) %>% summarize(electric=electric,mpgdif = highway08-city08,.groups='drop') %>%
+  ggplot() +
+  geom_violin(aes(electric,mpgdif))
+```
+
+| Taking a look at overall mileage, we see that electric cars do have a significantly higher city and highway mileage. We also notice that the difference between an electric car's highway and city mileage is significantly larger than a gas car's difference. It is also found that the majority of electric cars actually have a higher city mileage than highway mileage, as opposed to traditional cars almost always having a higher highway mileage. This is a strong indicator that electric cars could be much more effective in cities, as well as being more cost-effective in general.
+
+
+```{r,echo=FALSE,include=FALSE}
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,cost60comb))
+```
+
+```{r,echo=FALSE,include=FALSE}
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,cost60city))
+```
+
+```{r,echo=FALSE,include=FALSE}
+group_by(df2,electric) %>%
+  ggplot() +
+  geom_point(aes(electric,cost60hwy))
+```
+
+# Methods and Modeling
+
+|   Three linear regression methods were chosen to train one model for CO2 and two for cost per 60 miles (one for city, one for highway).
+|
+## OLS
+Ordinary Least Squares regression is the simplest of linear regression models, which aims to find the onedimensional line in data that will result in the minimum of the sum of all squared distances of observation points from that line. It is used to model linear regression and predict a response variable by predictor variables, assuming they have a linear relationship.
+
+
+## Ridge Regression
+Ridge Regression is a method of linear regression that adds a penalty term that is equal to the square of
+the coefficient of each predictor. There is also a coefficient added to the penalty term that penalizes large
+predictor coefficients. If the penalty term is zero, then the method as OLS. As we increase the value of the
+penalty term, it causes the value of the coefficient to trend towards zero. This leads to lower variance and
+low training bias.
+
+
+## LASSO Regression
+LASSO Regression, short for Least Absolute Shrinkage and Selection Operator Regression, is a linear
+regression model that, in a similar fashion to Ridge Regression, adds a penalty term and a regularization .
+It adds a penalty term to the cost function. This term is the sum of the absolute value of the coefficients.
+As the value of coefficients increases from 0 this term increases, causing the model to decrease the value of
+coefficients in order to reduce loss. As opposed to Ridge Regression, which lowers the value of coefficients
+but won’t reduce dimensionality, LASSO Regression tends to set coefficients equal to zero.
+
+
+  Predictor variables for each of the 3 models were chosen by backwards selection, while also removing variables with high multi-collinearity. These models were tested for proper linear fit and after analysis the two mileage models had their response squared to better fit a linear regression. 3 methods were then used to train each model resulting in 9 total models. Each model was tested using 5-folds Cross Validation to determine the 3 best models, one predicting CO2 emissions, one for city mileage, and another for highway mileage. The models with the lose RMSE were selected as final models, which were Ridge for CO2, OLS for city mileage, and Ridge for highway mileage.
+
+
+
+# Results and Discussion
+
+
+### CO2 Model
+|   The CO2 model was predicted by the cost to travel 60 miles, the years since 2012 that the car was manufactured, and the make of the car. The model was highly effective in that it represented 93.86% of the variability in CO2 emissions. The model deduced that each of these variables were significant. The output of the ridge regression coefficients shows that CO2 in grams per mile emission is greatly increased for each dollar that it costs to travel 60 miles, with a coefficient of 35.132. It also shows the makes of cars that have the greatest effect in increasing CO2 emissions, with the top ones being Mobility Ventures LLC, GMC, VPG, Lincoln, and Ford. The model also shows a decrease in CO2 emissions with years since 2012, with a coefficient of -1.105.
+|
+|   While the model was very effective in predicting CO2 emissions and showed the significant effects of mileage and make on CO2 emissions. It would have been more insightful to have emission data from a longer span of years to see emission trends in a longer, more stable period of time.
+
+### City/Highway cost mileage model
+|   The city cost for 60 miles was predicted by city mileage, years since 2012, and the make of the car. The model represented 64.35% of the variability in the training data and had a mean average Percentile error of 68.45%. While this is a rather large error, it is good to know that this could be compounded by the squared response variable. The model output shows that city mileage and years since 2012 are significant and negatively correlating with cost of going 60 miles in a city. It is important to take note that many electric car manufacturers such as Tesla have a positive coefficient, which suggest that those makes increase cost for city mileage, but this could be due to the correlations between electric cars and mileage, which means that since electric cars have such high mileage it may make the make coefficients "wrong" in some cases.
+|
+| The highway cost for 60 miles was predicted by highway mileage, years since 2012, and the make of the car. The model accounted for 68.99% of the variability in the training data, similar to the city model. Again the unpredictability of the model could be compounded by the squared response variable. The model shows that highway mileage and years since 2012 are significant and negatively correlating with the cost of going 60 miles on a highway. Again the same error with mainly electric manufacturers for the city model can be said for the highway model, as Tesla has a very large coefficient, but when looking at mileage Tesla has very high mileage.
+|
+|   While all the variables in the city and highway models are significant, the one that links cost to electric vehicles is the mileage. The t-test for difference of means shows that electric cars do have a significantly greater mileage than non-electric cars in the city and highway. This paired with the coefficients of the models is evidence to support that electric cars do have a lower operating cost than traditional gas vehicles. Another discovery is that electric cars have significantly higher average city mileage that highway mileage. The city and highway models also show that city mileage variable in the city model has a more effective coefficient, -3.76, than the highway mileage variable in the highway model, -2.87. This provides evidence that for one, electric cars are more efficient in city areas than suburban or rural. It also implies that switching to an electric car will save you more if you are in the city.
+
+
+
+# Conclusion
+
+|   In regards to CO2 emission over time and between car manufacturers. It is concluded that car emissions have a decreasing trend in years. While there are certain years that average emission from new cars might surpass previous years, the overall trend is a decreasing one. For future studies on CO2 emissions from cars, it would be beneficial to have from from a larger span of years to compare and see if the trends are the same or different in a longer time span.
+|
+|   Using Ridge and OLS Regression methods, moderately strong traveling cost prediction models were created. 80-20 split testing for the models resulted in decent RMSEs. From these models and difference of means testing it is concluded that electric cars are more cost-effective than non0electric vehicles due to their superior mileage. A future attempt could be made with other regression methods, both linear and nonlinear. Additional features from other data sets could also supplement this data to make a stronger model that could tell more about electric cars. Data on car pricing could also be useful in determining how much time it would take to level the upfront cost of an electric vehicle after purchasing it.
+
+
+
+# Appendix
+
+```{r,include=FALSE}
+set.seed(69420)
+```
+
+```{r,include=FALSE}
+library(regclass)
+library(caret)
+library(glmnet)
+library(MASS)
+library(MLmetrics)
+```
+
+```{r,echo=FALSE}
+# Scale year variable by changing it to years since 2012
+df2$year2012 <- df2$year-2012
+
+# Remove electrics for co2 model
+df3 <- df2[df2$electric!=TRUE,]
+```
+
+## Output of cross validation and models
+
+```{r}
+#specify the cross-validation method
+ctrl <- trainControl(method = "cv", number = 5)
+
+# OLS
+model <- train(co2~cost60comb+year2012+make,data=df3,method="lm",trControl=ctrl)
+print(model)
+
+# Ridge
+model <- train(co2~cost60comb+year2012+make,data=df3,method="ridge",trControl=ctrl)
+print(model)
+
+# LASSO
+model <- train(co2~cost60comb+year2012+make,data=df3,method="lasso",trControl=ctrl)
+print(model)
+
+```
+
+```{r}
+# Make model and look at coefficients
+rgmod=lm.ridge(co2~cost60comb+year2012+make,data=df3,lambda=1e-4)
+coef(rgmod)
+
+```
+
+
+
+```{r}
+# OLS
+model <- train(cost60city^2~city08+year2012+make,data=df2,method="lm",trControl=ctrl)
+print(model)
+
+# Ridge
+model <- train(cost60city^2~city08+year2012+make,data=df2,method="ridge",trControl=ctrl)
+print(model)
+
+# LASSO
+model <- train(cost60city^2~city08+year2012+make,data=df2,method="lasso",trControl=ctrl)
+print(model)
+```
+
+
+
+```{r}
+citycostmod <- lm(cost60city^2~city08+year2012+make,data=df2)
+summary(citycostmod)
+MAPE(citycostmod$fitted.values,df2$cost60city^2)
+```
+
+
+
+
+```{r}
+# OLS
+model <- train(cost60hwy^2~highway08+year2012+make,data=df2,method="lm",trControl=ctrl)
+print(model)
+
+# Ridge
+model <- train(cost60hwy^2~highway08+year2012+make,data=df2,method="ridge",trControl=ctrl)
+print(model)
+
+# LASSO
+model <- train(cost60hwy^2~highway08+year2012+make,data=df2,method="lasso",trControl=ctrl)
+print(model)
+```
+
+
+```{r}
+# Make model and look at coefficients
+rgmod=lm.ridge(cost60hwy^2~highway08+year2012+make,data=df2,lambda=1e-4)
+coef(rgmod)
+```
+
+
+
+
+
+
