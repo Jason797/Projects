@@ -3,6 +3,8 @@ Work/Class Projects
 
 This is the repository for all Statistics/Data Science projects I have done
 
+MRI Brain Tumor Classification using Machine Learning Methods ----> https://github.com/Jason797/Projects/blob/main/MRI%20Brain%20Tumor%20Classification.pdf
+
 Merging Two Large Covid In Prison Data Sets (Save file as html to view) ----> https://github.com/Jason797/Projects/blob/main/Merging%20CPP_Scrape%20and%20Cpp_Long.nb.html
 
 Song Popularity Modeling ----> https://htmlpreview.github.io/?https://github.com/Jason797/Projects/blob/main/Song%20Popularity%20Modeling.html
